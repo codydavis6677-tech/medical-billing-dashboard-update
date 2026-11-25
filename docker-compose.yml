@@ -1,0 +1,63 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: medical_billing
+      POSTGRES_PASSWORD: medical_billing_password
+      POSTGRES_DB: medical_billing
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medical_billing -d medical_billing"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Ollama for Open-Source AI (Llama 3.1)
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_MODELS=llama3.1:8b
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Next.js Application
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "postgresql://medical_billing:medical_billing_password@db:5432/medical_billing"
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:-change-this-in-production}"
+      NEXTAUTH_URL: "${NEXTAUTH_URL:-http://localhost:3000}"
+      # AI Provider Configuration
+      AI_PROVIDER: "${AI_PROVIDER:-ollama}"
+      OLLAMA_BASE_URL: "http://ollama:11434"
+      OLLAMA_MODEL: "${OLLAMA_MODEL:-llama3.1:8b}"
+      # OpenAI (optional, for fallback)
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      # Google Sheets
+      GOOGLE_SHEETS_API_KEY: "${GOOGLE_SHEETS_API_KEY}"
+      GOOGLE_SHEET_ID: "${GOOGLE_SHEET_ID:-17beKZ1euW_ixmW2AGC-VC4bLsYgE0BpmKtKYWvPQKzc}"
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  ollama_data:
